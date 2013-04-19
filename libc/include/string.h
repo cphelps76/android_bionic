@@ -146,7 +146,7 @@ extern void __strlcpy_error()
     __attribute__((__error__("strlcpy called with size bigger than buffer")));
 extern size_t __strlcpy_chk(char *, const char *, size_t, size_t);
 
-__BIONIC_FORTIFY_INLINE_WITHOUT_ALWAYS
+__BIONIC_FORTIFY_INLINE
 size_t strlcpy(char *dest, const char *src, size_t size) {
     size_t bos = __builtin_object_size(dest, 0);
 
@@ -201,8 +201,6 @@ size_t strlcat(char *dest, const char *src, size_t size) {
     return __strlcat_chk(dest, src, size, bos);
 }
 
-__purefunc extern size_t __strlen_real(const char *)
-    __asm__(__USER_LABEL_PREFIX__ "strlen");
 extern size_t __strlen_chk(const char *, size_t);
 
 __BIONIC_FORTIFY_INLINE
@@ -211,11 +209,55 @@ size_t strlen(const char *s) {
 
     // Compiler doesn't know destination size. Don't call __strlen_chk
     if (bos == __BIONIC_FORTIFY_UNKNOWN_SIZE) {
-        return __strlen_real(s);
+        return __builtin_strlen(s);
+    }
+
+    size_t slen = __builtin_strlen(s);
+    if (__builtin_constant_p(slen)) {
+        return slen;
     }
 
     return __strlen_chk(s, bos);
 }
+
+extern char* __strchr_chk(const char *, int, size_t);
+
+__BIONIC_FORTIFY_INLINE
+char* strchr(const char *s, int c) {
+    size_t bos = __builtin_object_size(s, 0);
+
+    // Compiler doesn't know destination size. Don't call __strchr_chk
+    if (bos == __BIONIC_FORTIFY_UNKNOWN_SIZE) {
+        return __builtin_strchr(s, c);
+    }
+
+    size_t slen = __builtin_strlen(s);
+    if (__builtin_constant_p(slen) && (slen < bos)) {
+        return __builtin_strchr(s, c);
+    }
+
+    return __strchr_chk(s, c, bos);
+}
+
+extern char* __strrchr_chk(const char *, int, size_t);
+
+__BIONIC_FORTIFY_INLINE
+char* strrchr(const char *s, int c) {
+    size_t bos = __builtin_object_size(s, 0);
+
+    // Compiler doesn't know destination size. Don't call __strrchr_chk
+    if (bos == __BIONIC_FORTIFY_UNKNOWN_SIZE) {
+        return __builtin_strrchr(s, c);
+    }
+
+    size_t slen = __builtin_strlen(s);
+    if (__builtin_constant_p(slen) && (slen < bos)) {
+        return __builtin_strrchr(s, c);
+    }
+
+    return __strrchr_chk(s, c, bos);
+}
+
 
 #endif /* defined(__BIONIC_FORTIFY_INLINE) */
 

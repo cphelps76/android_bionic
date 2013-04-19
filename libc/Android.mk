@@ -185,6 +185,7 @@ libc_common_src_files := \
 	string/strcasecmp.c \
 	string/strcasestr.c \
 	string/strcat.c \
+	string/strchr.c \
 	string/strcoll.c \
 	string/strcspn.c \
 	string/strdup.c \
@@ -277,6 +278,7 @@ libc_common_src_files := \
 	bionic/libc_init_common.c \
 	bionic/logd_write.c \
 	bionic/md5.c \
+	bionic/memmove_words.c \
 	bionic/pututline.c \
 	bionic/realpath.c \
 	bionic/sched_getaffinity.c \
@@ -377,17 +379,21 @@ libc_common_src_files += \
 	arch-arm/bionic/tgkill.S \
 	arch-arm/bionic/memcmp.S \
 	arch-arm/bionic/memcmp16.S \
-	arch-arm/bionic/memcpy.S \
+	arch-arm/bionic/memset.S \
 	arch-arm/bionic/setjmp.S \
 	arch-arm/bionic/sigsetjmp.S \
+	arch-arm/bionic/strcpy.S \
 	arch-arm/bionic/strcmp.S \
 	arch-arm/bionic/syscall.S \
 	string/strncmp.c \
 	unistd/socketcalls.c
 
+# String routines optimized for ARMv7
 ifeq ($(ARCH_ARM_HAVE_ARMV7A),true)
+libc_common_src_files += arch-arm/bionic/memchr.S
 libc_common_src_files += arch-arm/bionic/strlen-armv7.S
 else
+libc_common_src_files += string/memchr.c
 libc_common_src_files += arch-arm/bionic/strlen.c.arm
 endif
 
@@ -400,21 +406,14 @@ endif
 
 # Check if we want a neonized version of memmove instead of the
 # current ARM version
-ifeq ($(TARGET_USE_SCORPION_BIONIC_OPTIMIZATION),true)
-libc_common_src_files += \
-	arch-arm/bionic/memmove.S \
-	bionic/memmove_words.c
-else
 ifeq ($(ARCH_ARM_HAVE_NEON),true)
  libc_common_src_files += \
 	arch-arm/bionic/memmove.S
  else # Other ARM
  libc_common_src_files += \
 	string/bcopy.c \
-	string/memmove.c.arm \
-	bionic/memmove_words.c
- endif # !TARGET_USE_KRAIT_BIONIC_OPTIMIZATION
-endif # !TARGET_USE_SCORPION_BIONIC_OPTIMIZATION
+	string/memmove.c.arm
+endif # ARCH_ARM_HAVE_NEON
 
 # If the kernel supports kernel user helpers for gettimeofday, use
 # that instead.
@@ -447,30 +446,6 @@ libc_arch_static_src_files := \
 
 libc_arch_dynamic_src_files := \
 	arch-arm/bionic/exidx_dynamic.c
-
-ifeq ($(ARCH_ARM_HAVE_ARMV7A),true)
-libc_common_src_files += \
-	arch-arm/bionic/armv7/memchr.S \
-	arch-arm/bionic/armv7/memset.S \
-    arch-arm/bionic/armv7/bzero.S \
-	arch-arm/bionic/armv7/strchr.S \
-	arch-arm/bionic/strcpy.S \
-	arch-arm/bionic/strlen-armv7.S
-else
-libc_common_src_files += \
-	string/memchr.c \
-	arch-arm/bionic/memset.S \
-	string/strchr.c \
-	arch-arm/bionic/strcpy.S \
-	arch-arm/bionic/strlen.c.arm
-endif
-
-else # arm
-
-libc_common_src_files += \
-	string/memchr.c \
-	string/strchr.c
-
 endif # arm
 
 ifeq ($(TARGET_ARCH),x86)
@@ -618,9 +593,8 @@ ifeq ($(TARGET_ARCH),arm)
   ifeq ($(ARCH_ARM_USE_NON_NEON_MEMCPY),true)
     libc_common_cflags += -DARCH_ARM_USE_NON_NEON_MEMCPY
   endif
-  ifeq ($(ARCH_ARM_HAVE_ARMV7A),true)
-    libc_common_cflags += -DNEON_UNALIGNED_ACCESS -DNEON_MEMCPY_ALIGNMENT_DIVIDER=224
-  endif
+
+
   ifeq ($(ARCH_ARM_HAVE_NEON_UNALIGNED_ACCESS),true)
     libc_common_cflags += -DNEON_UNALIGNED_ACCESS
   endif
@@ -629,6 +603,34 @@ ifeq ($(TARGET_ARCH),arm)
   endif
   ifneq ($(ARCH_ARM_NEON_MEMSET_DIVIDER),)
     libc_common_cflags += -DNEON_MEMSET_DIVIDER=$(ARCH_ARM_NEON_MEMSET_DIVIDER)
+  endif
+
+  # Add in defines to activate SCORPION_NEON_OPTIMIZATION
+  ifeq ($(TARGET_USE_SCORPION_BIONIC_OPTIMIZATION),true)
+    libc_common_cflags += -DSCORPION_NEON_OPTIMIZATION
+    ifeq ($(TARGET_USE_SCORPION_PLD_SET),true)
+      libc_common_cflags += -DPLDOFFS=$(TARGET_SCORPION_BIONIC_PLDOFFS)
+      libc_common_cflags += -DPLDSIZE=$(TARGET_SCORPION_BIONIC_PLDSIZE)
+    endif
+  endif
+  ifeq ($(TARGET_HAVE_TEGRA_ERRATA_657451),true)
+    libc_common_cflags += -DHAVE_TEGRA_ERRATA_657451
+  endif
+  # Add in defines to activate KRAIT_NEON_OPTIMIZATION
+  ifeq ($(TARGET_USE_KRAIT_BIONIC_OPTIMIZATION),true)
+    libc_common_cflags += -DKRAIT_NEON_OPTIMIZATION
+    ifeq ($(TARGET_USE_KRAIT_PLD_SET),true)
+      libc_common_cflags += -DPLDOFFS=$(TARGET_KRAIT_BIONIC_PLDOFFS)
+      libc_common_cflags += -DPLDTHRESH=$(TARGET_KRAIT_BIONIC_PLDTHRESH)
+      libc_common_cflags += -DPLDSIZE=$(TARGET_KRAIT_BIONIC_PLDSIZE)
+      libc_common_cflags += -DBBTHRESH=$(TARGET_KRAIT_BIONIC_BBTHRESH)
+    endif
+  endif
+  ifeq ($(TARGET_USE_SPARROW_BIONIC_OPTIMIZATION),true)
+    libc_common_cflags += -DSPARROW_NEON_OPTIMIZATION
+  endif
+  ifeq ($(TARGET_CORTEX_CACHE_LINE_32),true)
+    libc_common_cflags += -DCORTEX_CACHE_LINE_32
   endif
 else # !arm
   ifeq ($(TARGET_ARCH),x86)
@@ -825,7 +827,7 @@ WITH_MALLOC_CHECK_LIBC_A := $(strip $(WITH_MALLOC_CHECK_LIBC_A))
 include $(CLEAR_VARS)
 
 LOCAL_SRC_FILES := bionic/ssp.c
-LOCAL_CFLAGS := $(libc_common_cflags) -fno-stack-protector -Werror
+LOCAL_CFLAGS := $(libc_common_cflags) -fno-stack-protector
 LOCAL_C_INCLUDES := $(libc_common_c_includes)
 LOCAL_MODULE := libbionic_ssp
 LOCAL_ADDITIONAL_DEPENDENCIES := $(LOCAL_PATH)/Android.mk
