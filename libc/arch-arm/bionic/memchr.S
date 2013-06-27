@@ -29,14 +29,11 @@
    OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
    Written by Dave Gilbert <david.gilbert@linaro.org>
-   Adapted to Bionic by Bernhard Rosenkraenzer <Bernhard.Rosenkranzer@linaro.org>
 
    This memchr routine is optimised on a Cortex-A9 and should work on
    all ARMv7 processors.   It has a fast past for short sizes, and has
    an optimised path for large data sets; the worst case is finding the
    match early in a large data set. */
-
-#include <machine/asm.h>
 
 @ 2011-02-07 david.gilbert@linaro.org
 @    Extracted from local git a5b438d861
@@ -54,11 +51,16 @@
 #else
 #define CHARTSTMASK(c) 1<<(c*8)
 #endif
+	.text
+	.thumb
 
 @ ---------------------------------------------------------------------------
 	.thumb_func
+	.align 2
 	.p2align 4,,15
-ENTRY(memchr)
+	.global memchr
+	.type memchr,%function
+memchr:
 	@ r0 = start of memory to scan
 	@ r1 = character to look for
 	@ r2 = length
@@ -66,7 +68,7 @@ ENTRY(memchr)
 	and	r1,r1,#0xff	@ Don't think we can trust the caller to actually pass a char
 
 	cmp	r2,#16		@ If it's short don't bother with anything clever
-	blt	20f
+	blt	20f 
 
 	tst	r0, #7		@ If it's already aligned skip the next bit
 	beq	10f
@@ -147,4 +149,3 @@ ENTRY(memchr)
 	pop	{r4,r5,r6,r7}
 	subs	r0,r0,#1
 	bx	lr
-END(memchr)
